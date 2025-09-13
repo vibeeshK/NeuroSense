@@ -1,0 +1,7 @@
+/* app/globals.css */
+@import "tailwindcss";
+
+/* optional small tweaks */
+@layer base {
+  html, body { height: 100%; }
+}
