@@ -141,7 +141,8 @@ export async function POST(req: NextRequest) {
     headers.set('Content-Disposition', 'attachment; filename="CYP_ADHD_RTC_Report.docx"');
     try { headers.set('x-neurosense-json', encodeURIComponent(JSON.stringify(merged))); } catch {}
 
-    return new NextResponse(new Blob([buffer]), { status: 200, headers });
+    // FIX: Return buffer directly instead of wrapping in Blob
+    return new NextResponse(buffer, { status: 200, headers });
   } catch (err: any) {
     console.error(err);
     return NextResponse.json({ error: 'Internal error', details: String(err) }, { status: 500 });
