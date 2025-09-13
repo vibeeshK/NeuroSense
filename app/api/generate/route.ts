@@ -142,7 +142,8 @@ export async function POST(req: NextRequest) {
     try { headers.set('x-neurosense-json', encodeURIComponent(JSON.stringify(merged))); } catch {}
 
     // FIX: Return buffer directly instead of wrapping in Blob
-    return new NextResponse(buffer, { status: 200, headers });
+    return new NextResponse(new Uint8Array(buffer), { status: 200, headers });
+
   } catch (err: any) {
     console.error(err);
     return NextResponse.json({ error: 'Internal error', details: String(err) }, { status: 500 });
