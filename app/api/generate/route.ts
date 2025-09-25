@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const MODEL = 'models/gemini-2.0-flash';
 
-// JSON schema that MUST match the placeholders in the DOCX
-const PLACEHOLDER_SCHEMA = {
+// ADHD schema - includes AutismScreening field
+const ADHD_SCHEMA = {
   AssessmentDate: "", ReportDate: "",
   ClientFirstName: "", ClientSurname: "", ClientAge: "", DOB: "", NHSNumber: "", ClientID: "", ClientAddress: "",
   AssessmentOutcome: "",
@@ -28,10 +28,50 @@ const PLACEHOLDER_SCHEMA = {
   SummaryAndClosing: "", ClinicianName: "", ClinicianTitle: ""
 };
 
-function systemPrompt(extraNotes: string) {
-  return `You are an assistant that converts an ADHD input questionnaire into a JSON object.
+// Autism schema - includes ADHDScreening field instead of AutismScreening
+const AUTISM_SCHEMA = {
+  AssessmentDate: "", ReportDate: "",
+  ClientFirstName: "", ClientSurname: "", ClientAge: "", DOB: "", NHSNumber: "", ClientID: "", ClientAddress: "",
+  AssessmentOutcome: "",
+  AssessmentMode: "", HistoryProvidedBy: "", ChildPresenceConfirmation: "",
+  WhoWeAssessed: "", Consent: "", UnderstandingOfAppointment: "", ReasonForReferral: "",
+  PregnancyBirthHistory: "", BirthDetails: "", Allergies: "", Medications: "", Immunisations: "", Vision: "", Hearing: "", Safeguarding: "",
+  Babyhood: "", DevelopmentalMilestones: "", SpeechLanguage: "", Regression: "", Toileting: "", NurseryStart: "", NurseryConcerns: "", SeparationAnxiety: "", SocialPlaySkills: "",
+  HouseholdDetails: "", MothersAgeOccupation: "", FathersAgeOccupation: "", Siblings: "", FamilyHistory: "", SignificantLifeEvents: "",
+  AnxietyMood: "", MentalHealthServices: "", SelfHarmSuicidalConcerns: "",
+  AttentionAndConcentration: "", ActivityLevels: "", Impulsivity: "", RiskyBehaviours: "", DangerAwareness: "",
+  ExecutiveFunctioning: "", EmotionalRegulation: "", SelfCareAndIndependence: "", SocialCommunication: "", FriendshipsAndRelationships: "", RestrictedRepetitiveBehaviours: "", SensoryIssues: "",
+  Education: "", ObservationsFromClinicalInterview: "", PhysicalExamination: "",
+  WhyDiagnosis: "",
+  RecommendationsGeneral: "", ADHDScreening: "", ADHDMedication: "", SpeechLanguageOTEdPsych: "", PhysicalHealth: "", Sleep: "", MentalHealthSupport: "",
+  SummaryAndClosing: "", ClinicianName: "", ClinicianTitle: ""
+};
+
+// Template configuration
+const TEMPLATE_CONFIGS = {
+  'cyp_adhd': {
+    schema: ADHD_SCHEMA,
+    filename: 'CYP ADHD.docx',
+    outputName: 'CYP_ADHD_Report.docx',
+    assessmentType: 'ADHD'
+  },
+  'cyp_autism': {
+    schema: AUTISM_SCHEMA,
+    filename: 'CYP Autism.docx',
+    outputName: 'CYP_Autism_Report.docx',
+    assessmentType: 'autism'
+  }
+};
+
+function systemPrompt(templateType: string, extraNotes: string) {
+  const config = TEMPLATE_CONFIGS[templateType as keyof typeof TEMPLATE_CONFIGS];
+  if (!config) {
+    throw new Error(`Unknown template type: ${templateType}`);
+  }
+
+  return `You are an assistant that converts an ${config.assessmentType} assessment questionnaire into a JSON object.
 Strictly output JSON only — no text outside JSON. The JSON keys MUST match exactly these placeholders:
-${JSON.stringify(PLACEHOLDER_SCHEMA, null, 2)}
+${JSON.stringify(config.schema, null, 2)}
 
 Populate each field with the appropriate narrative text based on the uploaded file. If a field is not found, return an empty string for that key.
 ${extraNotes ? `\nAdditional clinician notes/instructions: ${extraNotes}` : ''}`;
@@ -46,6 +86,7 @@ export async function POST(req: NextRequest) {
     const form = await req.formData();
     const file = form.get('file') as File | null;
     const notes = (form.get('notes') as string) || '';
+    const templateType = (form.get('template') as string) || 'cyp_adhd';
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
@@ -90,7 +131,7 @@ export async function POST(req: NextRequest) {
           role: "user",
           parts: [
             { fileData: { fileUri, mimeType: uploadedMime } },
-            { text: systemPrompt(notes) }
+            { text: systemPrompt(templateType, notes) }
           ]
         }
       ],
@@ -128,17 +169,23 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Merge with schema
-    const merged = { ...PLACEHOLDER_SCHEMA, ...data };
+    // Get the correct template config
+    const config = TEMPLATE_CONFIGS[templateType as keyof typeof TEMPLATE_CONFIGS];
+    if (!config) {
+      return NextResponse.json({ error: 'Invalid template type' }, { status: 400 });
+    }
+
+    // Merge with appropriate schema
+    const merged = { ...config.schema, ...data };
     console.log("Gemini JSON:", merged);
     console.log('Merged keys:', Object.keys(merged));
 
-    // 3) Fill the DOCX template
-    const buffer = await fillDocxTemplate("CYP_ADHD_RTC_Template.docx", merged);
+    // 3) Fill the DOCX template with the selected template file
+    const buffer = await fillDocxTemplate(config.filename, merged);
 
     const headers = new Headers();
     headers.set('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    headers.set('Content-Disposition', 'attachment; filename="CYP_ADHD_RTC_Report.docx"');
+    headers.set('Content-Disposition', `attachment; filename="${config.outputName}"`);
     try { headers.set('x-neurosense-json', encodeURIComponent(JSON.stringify(merged))); } catch {}
 
     // FIX: Return buffer directly instead of wrapping in Blob

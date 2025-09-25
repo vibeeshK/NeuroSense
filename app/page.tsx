@@ -7,11 +7,11 @@ type Phase = 'idle' | 'uploading' | 'generating' | 'ready' | 'error';
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [notes, setNotes] = useState('');
-  const [reportType, setReportType] = useState('adhd_rtc'); // future: add more
+  const [reportType, setReportType] = useState('cyp_adhd'); // default to ADHD template
   const [phase, setPhase] = useState<Phase>('idle');
   const [status, setStatus] = useState<string>('Waiting for your PDF…');
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [downloadName, setDownloadName] = useState<string>('CYP_ADHD_RTC_Report.docx');
+  const [downloadName, setDownloadName] = useState<string>('CYP_ADHD_Report.docx');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -24,13 +24,13 @@ export default function Home() {
   function resetAll() {
     setFile(null);
     setNotes('');
-    setReportType('adhd_rtc');
+    setReportType('cyp_adhd');
     setPhase('idle');
     setStatus('Waiting for your PDF…');
     setErrorMsg(null);
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     setDownloadUrl(null);
-    setDownloadName('CYP_ADHD_RTC_Report.docx');
+    setDownloadName('CYP_ADHD_Report.docx');
     if (inputRef.current) inputRef.current.value = '';
   }
 
@@ -163,8 +163,8 @@ export default function Home() {
                 onChange={(e) => setReportType(e.target.value)}
                 className="h-11 rounded-xl border border-sky-200 bg-white px-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-300"
               >
-                <option value="adhd_rtc">ADHD RTC Report (CYP)</option>
-                {/* Future: add more options here */}
+                <option value="cyp_adhd">ADHD Assessment (CYP)</option>
+                <option value="cyp_autism">Autism Assessment (CYP)</option>
               </select>
             </div>
 
