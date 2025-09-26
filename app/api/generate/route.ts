@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { fillDocxTemplate } from '@/lib/docx';
 import path from 'node:path';
 import fs from 'node:fs';
+import PizZip from 'pizzip';
+import Docxtemplater from 'docxtemplater';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -98,48 +100,94 @@ export async function POST(req: NextRequest) {
     const mimeType = file.type || 'application/octet-stream';
     const fileName = file.name || 'input';
 
-    // 1) Upload the file to Gemini File API
-    const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${GEMINI_API_KEY}`;
-    const formData = new FormData();
-    formData.append('file', new Blob([bytes], { type: mimeType }), fileName);
-
-    const uploadResp = await fetch(uploadUrl, {
-      method: 'POST',
-      body: formData,
+    console.log('File upload details:', {
+      name: fileName,
+      type: mimeType,
+      size: bytes.length,
+      templateType
     });
 
-    if (!uploadResp.ok) {
-      const t = await uploadResp.text();
-      console.error('Upload error:', t);
-      return NextResponse.json({ error: 'Gemini upload failed', details: t }, { status: 500 });
-    }
+    let body: any;
 
-    const uploaded = await uploadResp.json();
-    const fileUri = uploaded?.file?.uri || uploaded?.file?.name || '';
-    const uploadedMime = uploaded?.file?.mimeType || mimeType;
+    // Extract text from DOCX or handle PDF differently
+    if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileName.endsWith('.docx')) {
+      // Extract text from DOCX
+      let textContent = '';
+      try {
+        const zip = new PizZip(bytes);
+        const doc = new Docxtemplater(zip, {
+          paragraphLoop: true,
+          linebreaks: true,
+        });
 
-    if (!fileUri) {
-      return NextResponse.json({ error: 'Upload succeeded but no file URI returned', payload: uploaded }, { status: 500 });
-    }
-
-    // 2) Call Gemini with the file reference + schema prompt
-    const genUrl = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-
-    const body = {
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { fileData: { fileUri, mimeType: uploadedMime } },
-            { text: systemPrompt(templateType, notes) }
-          ]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.2,
-        responseMimeType: "application/json"
+        // Get the full text of the document
+        textContent = doc.getFullText();
+        console.log('Extracted text from DOCX, length:', textContent.length);
+      } catch (error) {
+        console.error('Error extracting text from DOCX:', error);
+        return NextResponse.json({ error: 'Failed to extract text from DOCX file' }, { status: 400 });
       }
-    };
+
+      // For DOCX, send text directly to Gemini
+      body = {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: `Document content:\n${textContent}\n\n${systemPrompt(templateType, notes)}` }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json"
+        }
+      };
+    } else {
+      // For PDF files, use the file upload API
+      const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${GEMINI_API_KEY}`;
+      const formData = new FormData();
+      formData.append('file', new Blob([bytes], { type: mimeType }), fileName);
+
+      const uploadResp = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadResp.ok) {
+        const t = await uploadResp.text();
+        console.error('Upload error:', t);
+        return NextResponse.json({ error: 'Gemini upload failed', details: t }, { status: 500 });
+      }
+
+      const uploaded = await uploadResp.json();
+      const fileUri = uploaded?.file?.uri || uploaded?.file?.name || '';
+      const uploadedMime = uploaded?.file?.mimeType || mimeType;
+
+      if (!fileUri) {
+        return NextResponse.json({ error: 'Upload succeeded but no file URI returned', payload: uploaded }, { status: 500 });
+      }
+
+      // For PDF, use file reference
+      body = {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { fileData: { fileUri, mimeType: uploadedMime } },
+              { text: systemPrompt(templateType, notes) }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json"
+        }
+      };
+    }
+
+    // Call Gemini with either text (for DOCX) or file reference (for PDF)
+    const genUrl = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
     const genResp = await fetch(genUrl, {
       method: 'POST',
