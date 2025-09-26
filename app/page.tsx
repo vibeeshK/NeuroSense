@@ -9,7 +9,7 @@ export default function Home() {
   const [notes, setNotes] = useState('');
   const [reportType, setReportType] = useState('cyp_adhd'); // default to ADHD template
   const [phase, setPhase] = useState<Phase>('idle');
-  const [status, setStatus] = useState<string>('Waiting for your PDF…');
+  const [status, setStatus] = useState<string>('Waiting for your document…');
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [downloadName, setDownloadName] = useState<string>('CYP_ADHD_Report.docx');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -26,7 +26,7 @@ export default function Home() {
     setNotes('');
     setReportType('cyp_adhd');
     setPhase('idle');
-    setStatus('Waiting for your PDF…');
+    setStatus('Waiting for your document…');
     setErrorMsg(null);
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     setDownloadUrl(null);
@@ -194,14 +194,14 @@ export default function Home() {
               <input
                 ref={inputRef}
                 type="file"
-                accept="application/pdf"
+                accept="application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   setFile(f ?? null);
                   setDownloadUrl(null);
                   setPhase('idle');
-                  setStatus(f ? 'File ready. Click Generate.' : 'Waiting for your PDF…');
+                  setStatus(f ? 'File ready. Click Generate.' : 'Waiting for your document…');
                   setErrorMsg(null);
                 }}
               />
@@ -218,7 +218,7 @@ export default function Home() {
                   browse
                 </span>
               </div>
-              <p className="mt-1 text-sm text-slate-500">Text File or PDF only • Keeps your original formatting best</p>
+              <p className="mt-1 text-sm text-slate-500">PDF or Word document (.docx) • Keeps your original formatting</p>
 
               {file && (
                 <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-xl bg-white px-3 py-1.5 text-sm text-slate-700 ring-1 ring-sky-200">
@@ -231,7 +231,7 @@ export default function Home() {
                       setFile(null);
                       setDownloadUrl(null);
                       setPhase('idle');
-                      setStatus('Waiting for your PDF…');
+                      setStatus('Waiting for your document…');
                       setErrorMsg(null);
                       if (inputRef.current) inputRef.current.value = '';
                     }}
@@ -304,7 +304,7 @@ export default function Home() {
 
           {/* tiny help */}
           <div className="mt-6 grid gap-1 text-xs text-slate-500">
-            <div>• Keep the PDF under 20MB. Extremely large scans may reduce extraction quality.</div>
+            <div>• Keep documents under 20MB. Extremely large files may reduce extraction quality.</div>
             <div>• Your notes are passed as guidance; the app never stores your document.</div>
           </div>
         </section>
